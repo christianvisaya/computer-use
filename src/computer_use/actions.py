@@ -117,6 +117,8 @@ def execute(action: dict[str, Any]) -> str:
 
     try:
         if action_type == "click":
+            if "x" not in action or "y" not in action:
+                raise ActionError(f"click action missing x or y: {action!r}")
             x = int(action["x"])
             y = int(action["y"])
             button = action.get("button", "left")

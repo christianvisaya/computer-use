@@ -114,7 +114,7 @@ def run(
             reasoning, action = actions.parse_action_with_reasoning(response)
         except Exception as e:
             print(colored(f"[Step {step}/{max_steps}] Could not parse AI response: {e}", "red"))
-            print(f"  Raw response: {response[:500]}")
+            print(f"  Raw response:\n{response[:1000]}")
             break
 
         # Show AI's reasoning
