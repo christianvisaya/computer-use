@@ -7,18 +7,20 @@ from termcolor import colored
 from computer_use import ai, actions, screenshot
 
 
-SYSTEM_PROMPT_TEMPLATE = """You are a computer control agent. You see the user's screen and decide the next action.
+def build_system_prompt(agents_md: str) -> str:
+    """Build the system prompt with agents_md appended."""
+    return f"""You are a computer control agent. You see the user's screen and decide the next action.
 
 CRITICAL KEYBOARD-FIRST RULE: You MUST prefer keyboard shortcuts over mouse clicks. ONLY use mouse when keyboard navigation is impossible.
 
 **Keyboard shortcuts (USE THESE, NOT click):**
-- Open Chrome: `launch("Google Chrome")`
-- Address bar / URL: `hotkey(["command", "l"])` on macOS, `hotkey(["ctrl", "l"])` on Linux/Windows
+- Open Chrome: launch("Google Chrome")
+- Address bar / URL: hotkey(["command", "l"]) on macOS, hotkey(["ctrl", "l"]) on Linux/Windows
 - Type URL after focusing address bar: use `type` action
-- New tab: `hotkey(["command", "t"])`
-- Switch app: `hotkey(["command", "tab"])`
-- Select all: `hotkey(["command", "a"])`
-- Copy: `hotkey(["command", "c"])`, Paste: `hotkey(["command", "v"])`
+- New tab: hotkey(["command", "t"])
+- Switch app: hotkey(["command", "tab"])
+- Select all: hotkey(["command", "a"])
+- Copy: hotkey(["command", "c"]), Paste: hotkey(["command", "v"])
 
 You must respond with TWO things:
 1. Your ANALYSIS: Describe what you see in the screenshot and what you plan to do
@@ -26,19 +28,19 @@ You must respond with TWO things:
 
 Format your response like this:
 ANALYSIS: I can see [what you see]. I will [your plan].
-ACTION: {"action": "...", ...}
+ACTION: {{"action": "...", ...}}
 
 Example:
 ANALYSIS: I see the Chrome icon in the dock at bottom of screen. I will click it to open Chrome.
-ACTION: {"action": "launch", "app": "Google Chrome"}
+ACTION: {{"action": "launch", "app": "Google Chrome"}}
 
 Example:
 ANALYSIS: Chrome is open with an empty address bar. I will press Cmd+L to focus the address bar, then type the YouTube URL.
-ACTION: {"action": "hotkey", "keys": ["command", "l"]}
+ACTION: {{"action": "hotkey", "keys": ["command", "l"]}}
 
 Example:
 ANALYSIS: Address bar is now focused. I will type the YouTube search URL.
-ACTION: {"action": "type", "text": "https://www.youtube.com/results?search_query=dayz+jlk"}
+ACTION: {{"action": "type", "text": "https://www.youtube.com/results?search_query=dayz+jlk"}}
 
 Available actions (in priority order — use keyboard actions FIRST):
 
@@ -72,7 +74,7 @@ def run(
     """Run the screenshot→act loop."""
     provider = config["ai_provider"]
     agents_md = config.get("agents_md", "")
-    system_prompt = SYSTEM_PROMPT_TEMPLATE.format(agents_md=agents_md)
+    system_prompt = build_system_prompt(agents_md)
 
     step = 0
     while step < max_steps:
