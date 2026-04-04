@@ -25,49 +25,88 @@ def parse_action(raw: str) -> dict[str, Any]:
       - XML tool:  <invoke name="launch">...</invoke>
 
     """
+    _, action = parse_action_with_reasoning(raw)
+    return action
+
+
+def parse_action_with_reasoning(raw: str) -> tuple[str, dict[str, Any]]:
+    """Extract (reasoning, action) from AI response text.
+
+    Response format:
+        ANALYSIS: I see the dock...
+        ACTION: {"action": "click", ...}
+
+    Or just a raw JSON action if no analysis present.
+    """
     raw = raw.strip()
+
+    reasoning = ""
+    json_str = raw
+
+    # Look for ANALYSIS:/ACTION: pattern
+    analysis_idx = raw.find("ANALYSIS:")
+    action_idx = raw.find("ACTION:")
+
+    if analysis_idx != -1 and action_idx != -1:
+        # Extract reasoning
+        reasoning_part = raw[analysis_idx + len("ANALYSIS:"):action_idx].strip()
+        reasoning = reasoning_part.strip()
+
+        # Extract JSON action
+        json_str = raw[action_idx + len("ACTION:"):].strip()
+
+        # Remove any leading markdown code fences
+        if json_str.startswith("```"):
+            json_str = json_str.split("```")[1] if "```" in json_str else json_str
+            json_str = json_str.lstrip("json\n").strip()
+
+    elif analysis_idx != -1:
+        # Has ANALYSIS but no explicit ACTION marker — the JSON might follow
+        reasoning = raw[analysis_idx + len("ANALYSIS:"):].strip().split("\n")[0].strip()
+        # Try to find JSON after ANALYSIS
+        remaining = raw[analysis_idx:]
 
     # Try JSON first
     try:
-        return json.loads(raw)
+        return reasoning, json.loads(json_str)
     except json.JSONDecodeError:
         pass
 
     # Try to find JSON in the text
-    start = raw.find("{")
-    end = raw.rfind("}") + 1
+    start = json_str.find("{")
+    end = json_str.rfind("}") + 1
     if start != -1 and end > start:
         try:
-            return json.loads(raw[start:end])
+            return reasoning, json.loads(json_str[start:end])
         except json.JSONDecodeError:
             pass
 
     # Try XML tool call format: <invoke name="action_name">...\n<parameter name="key">value</parameter>...
-    invoke_start = raw.find('<invoke name="')
+    invoke_start = json_str.find('<invoke name="')
     if invoke_start != -1:
         name_start = invoke_start + len('<invoke name="')
-        name_end = raw.find('"', name_start)
-        action_name = raw[name_start:name_end]
+        name_end = json_str.find('"', name_start)
+        action_name = json_str[name_start:name_end]
 
         action: dict[str, Any] = {"action": action_name}
 
         # Extract all <parameter name="key">value</parameter> pairs
         param_pos = 0
         while True:
-            param_idx = raw.find('<parameter name="', param_pos)
+            param_idx = json_str.find('<parameter name="', param_pos)
             if param_idx == -1 or (invoke_start > 0 and param_idx > invoke_start + 1000):
                 break
             k_start = param_idx + len('<parameter name="')
-            k_end = raw.find('"', k_start)
-            key = raw[k_start:k_end]
-            val_start = raw.find(">", param_idx) + 1
-            val_end = raw.find("</parameter>", val_start)
-            value = raw[val_start:val_end].strip()
+            k_end = json_str.find('"', k_start)
+            key = json_str[k_start:k_end]
+            val_start = json_str.find(">", param_idx) + 1
+            val_end = json_str.find("</parameter>", val_start)
+            value = json_str[val_start:val_end].strip()
             action[key] = value
             param_pos = val_end
 
         if action.get("action"):
-            return action
+            return reasoning, action
 
     raise ValueError(f"Could not parse action from AI response: {raw!r}")
 

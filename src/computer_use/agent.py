@@ -9,62 +9,55 @@ from computer_use import ai, actions, screenshot
 
 SYSTEM_PROMPT_TEMPLATE = """You are a computer control agent. You see the user's screen and decide the next action.
 
-You must respond with a JSON object describing ONE action to take right now.
+CRITICAL KEYBOARD-FIRST RULE: You MUST prefer keyboard shortcuts over mouse clicks. ONLY use mouse when keyboard navigation is impossible.
 
-Available action types:
+**Keyboard shortcuts (USE THESE, NOT click):**
+- Open Chrome: `launch("Google Chrome")`
+- Address bar / URL: `hotkey(["command", "l"])` on macOS, `hotkey(["ctrl", "l"])` on Linux/Windows
+- Type URL after focusing address bar: use `type` action
+- New tab: `hotkey(["command", "t"])`
+- Switch app: `hotkey(["command", "tab"])`
+- Select all: `hotkey(["command", "a"])`
+- Copy: `hotkey(["command", "c"])`, Paste: `hotkey(["command", "v"])`
 
-1. click — Move mouse and click
-   {{ "action": "click", "x": 150, "y": 300, "button": "left" }}
+You must respond with TWO things:
+1. Your ANALYSIS: Describe what you see in the screenshot and what you plan to do
+2. A JSON action object
 
-2. double_click — Double click
-   {{ "action": "double_click", "x": 150, "y": 300, "button": "left" }}
+Format your response like this:
+ANALYSIS: I can see [what you see]. I will [your plan].
+ACTION: {"action": "...", ...}
 
-3. right_click — Right-click (context menu)
-   {{ "action": "right_click", "x": 150, "y": 300 }}
+Example:
+ANALYSIS: I see the Chrome icon in the dock at bottom of screen. I will click it to open Chrome.
+ACTION: {"action": "launch", "app": "Google Chrome"}
 
-4. move_to — Move mouse without clicking
-   {{ "action": "move_to", "x": 150, "y": 300 }}
+Example:
+ANALYSIS: Chrome is open with an empty address bar. I will press Cmd+L to focus the address bar, then type the YouTube URL.
+ACTION: {"action": "hotkey", "keys": ["command", "l"]}
 
-5. type — Type text
-   {{ "action": "type", "text": "hello world" }}
+Example:
+ANALYSIS: Address bar is now focused. I will type the YouTube search URL.
+ACTION: {"action": "type", "text": "https://www.youtube.com/results?search_query=dayz+jlk"}
 
-6. press — Press a special key (see pyautogui.KEYBOARD_KEYS)
-   {{ "action": "press", "key": "enter" }}
-   {{ "action": "press", "key": "tab" }}
-   {{ "action": "press", "key": "ctrl" }}  # modifier only
+Available actions (in priority order — use keyboard actions FIRST):
 
-7. hotkey — Press key combination
-   {{ "action": "hotkey", "keys": ["ctrl", "a"] }}  # Select all
-   {{ "action": "hotkey", "keys": ["command", "tab"] }}  # macOS app switch
+1. launch — Open app (only if NOT already open)
+2. hotkey — Key combo (PREFERRED — use over click)
+3. type — Type text
+4. press — Single key (enter, tab, escape)
+5. scroll — Scroll (usually avoidable)
+6. click — LAST RESORT ONLY
 
-8. launch — Open an application
-   {{ "action": "launch", "app": "Google Chrome" }}    # macOS
-   {{ "action": "launch", "app": "chrome", "linux_window_class": "google-chrome" }}
-   {{ "action": "launch", "app": "chrome", "win_program": "chrome" }}   # Windows
-
-9. terminal — Run a shell command and wait for it to finish
-   {{ "action": "terminal", "command": "ls -la", "timeout": 10 }}
-
-10. scroll — Scroll the mouse
-    {{ "action": "scroll", "x": 0, "y": -300 }}   # negative = up, positive = down
-
-11. wait — Just wait
-    {{ "action": "wait", "seconds": 2 }}
-
-12. done — Task is complete
-    {{ "action": "done", "reason": "Browser is open on youtube.com" }}
-
-Important rules:
-- ALWAYS inspect the screenshot carefully before acting. Identify the correct x,y coordinates.
-- After ANY action that causes a GUI change, take another screenshot to verify before continuing.
-- For typing, use the `type` action. For single keys, use `press`.
-- If pyautogui fails (e.g., GUI not ready), retry up to 2 times with 1s wait.
-- The screen resolution and UI scale matters. Use coordinates that match what you see.
-- macOS: Command key = "command", Control = "ctrl", Option = "option"
-- Linux: Super/Win key = "super"
-- Windows: Win key = "win"
-- If you are uncertain about an element's exact position, move the mouse first then click.
-- IMPORTANT: If Chrome (or the target app) is already open, do NOT launch it again. Click its window or use it directly.
+Key rules:
+- KEYBOARD FIRST: hotkey > type > press > click
+- NEVER click into a text field then type — just use `type` directly
+- For URLs: hotkey for address bar first, then `type` for URL
+- If Chrome ALREADY OPEN: do NOT launch again. Click its window or use Cmd+Tab.
+- After any GUI change, wait and re-screenshot to verify state
+- macOS: Command=⌘, Option=⌥, Control=ctrl
+- Linux: Super=⊞
+- Windows: Win key
 
 {agents_md}
 """
@@ -114,13 +107,17 @@ def run(
             print(colored(f"[Step {step}/{max_steps}] AI call failed: {e}", "red"))
             break
 
-        # Parse action
+        # Parse reasoning and action from response
         try:
-            action = actions.parse_action(response)
+            reasoning, action = actions.parse_action_with_reasoning(response)
         except Exception as e:
             print(colored(f"[Step {step}/{max_steps}] Could not parse AI response: {e}", "red"))
-            print(f"  Raw response: {response[:300]}")
+            print(f"  Raw response: {response[:500]}")
             break
+
+        # Show AI's reasoning
+        if reasoning:
+            print(colored(f"[Step {step}/{max_steps}] 💭 {reasoning}", "magenta"))
 
         action_type = action.get("action", "")
 
@@ -133,7 +130,7 @@ def run(
 
         # Log
         if action_type == "done":
-            print(colored(f"[Step {step}/{max_steps}] {result}", "green"))
+            print(colored(f"[Step {step}/{max_steps}] ✓ {result}", "green"))
             break
 
         print(colored(f"[Step {step}/{max_steps}] → {result}", "cyan"))
