@@ -76,6 +76,8 @@ def _get_model(config: dict) -> str:
         return config.get("ollama_model", "")
     elif provider == "openai":
         return config.get("openai_model", "")
+    elif provider == "anthropic":
+        return config.get("anthropic_model", "")
     return ""
 
 

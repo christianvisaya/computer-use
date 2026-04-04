@@ -2,7 +2,7 @@
 
 import pytest
 
-from computer_use.actions import parse_action, execute, ActionError
+from computer_use.actions import parse_action, parse_action_with_reasoning, execute, ActionError
 
 
 class TestParseAction:
@@ -83,3 +83,45 @@ class TestExecute:
         action = {"action": "type", "text": "hello world"}
         result = execute(action)
         assert "hello world" in result
+
+    def test_click_coordinate_format(self):
+        """AI models may return {"coordinate": [x, y]} instead of {"x": ..., "y": ...}"""
+        action = {"action": "click", "coordinate": [1175, 199]}
+        result = execute(action)
+        assert "1175" in result
+        assert "199" in result
+
+    def test_double_click_coordinate_format(self):
+        action = {"action": "double_click", "coordinate": [500, 300]}
+        result = execute(action)
+        assert "500" in result
+        assert "300" in result
+
+
+class TestParseActionWithReasoning:
+    def test_parses_analysis_and_action(self):
+        raw = (
+            "ANALYSIS: I see the Chrome dock icon. I will click it to open Chrome.\n"
+            'ACTION: {"action": "launch", "app": "Google Chrome"}'
+        )
+        reasoning, action = parse_action_with_reasoning(raw)
+        assert "Chrome" in reasoning
+        assert action["action"] == "launch"
+        assert action["app"] == "Google Chrome"
+
+    def test_parses_reasoning_only_no_action_raises(self):
+        raw = "ANALYSIS: I see the desktop but I'm not sure what to do."
+        with pytest.raises(ValueError):
+            parse_action_with_reasoning(raw)
+
+    def test_backward_compatible_without_analysis(self):
+        """parse_action_with_reasoning falls back to plain JSON when no ANALYSIS: marker."""
+        raw = '{"action": "press", "key": "enter"}'
+        reasoning, action = parse_action_with_reasoning(raw)
+        assert reasoning == ""
+        assert action["action"] == "press"
+
+    def test_strips_code_fence_from_action(self):
+        raw = "ANALYSIS: I'll press enter.\nACTION: ```json\n{\"action\": \"press\", \"key\": \"enter\"}\n```"
+        _, action = parse_action_with_reasoning(raw)
+        assert action["action"] == "press"

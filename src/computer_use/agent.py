@@ -1,6 +1,5 @@
 """Main agent: screenshot → AI → action → repeat loop."""
 
-import sys
 import time
 from termcolor import colored
 

@@ -63,8 +63,6 @@ def parse_action_with_reasoning(raw: str) -> tuple[str, dict[str, Any]]:
     elif analysis_idx != -1:
         # Has ANALYSIS but no explicit ACTION marker — the JSON might follow
         reasoning = raw[analysis_idx + len("ANALYSIS:"):].strip().split("\n")[0].strip()
-        # Try to find JSON after ANALYSIS
-        remaining = raw[analysis_idx:]
 
     # Try JSON first
     try:
@@ -111,35 +109,40 @@ def parse_action_with_reasoning(raw: str) -> tuple[str, dict[str, Any]]:
     raise ValueError(f"Could not parse action from AI response: {raw!r}")
 
 
+def _get_coords(action: dict[str, Any]) -> tuple[int, int]:
+    """Extract (x, y) from action dict, supporting both formats."""
+    if "coordinate" in action:
+        coords = action["coordinate"]
+        return int(coords[0]), int(coords[1])
+    elif "x" in action and "y" in action:
+        return int(action["x"]), int(action["y"])
+    else:
+        raise ActionError(f"action missing coordinates: {action!r}")
+
+
 def execute(action: dict[str, Any]) -> str:
     """Execute a single action dict and return a human-readable summary."""
     action_type = action.get("action", "")
 
     try:
         if action_type == "click":
-            if "x" not in action or "y" not in action:
-                raise ActionError(f"click action missing x or y: {action!r}")
-            x = int(action["x"])
-            y = int(action["y"])
+            x, y = _get_coords(action)
             button = action.get("button", "left")
             pyautogui.click(x, y, button=button)
             return f"click at ({x}, {y})"
 
         elif action_type == "double_click":
-            x = int(action["x"])
-            y = int(action["y"])
+            x, y = _get_coords(action)
             pyautogui.doubleClick(x, y)
             return f"double-click at ({x}, {y})"
 
         elif action_type == "right_click":
-            x = int(action["x"])
-            y = int(action["y"])
+            x, y = _get_coords(action)
             pyautogui.click(x, y, button="right")
             return f"right-click at ({x}, {y})"
 
         elif action_type == "move_to":
-            x = int(action["x"])
-            y = int(action["y"])
+            x, y = _get_coords(action)
             pyautogui.moveTo(x, y)
             return f"moved to ({x}, {y})"
 
