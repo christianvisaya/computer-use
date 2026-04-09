@@ -138,7 +138,12 @@ def main():
     parser.add_argument("--no-open", action="store_true", help="Skip opening MT4 (assume it's already running)")
     args = parser.parse_args()
 
-    if not args.password:
+    # Strip outer double-quotes if caller passed "password" (common in automation)
+    password = args.password
+    if password.startswith('"') and password.endswith('"') and len(password) >= 2:
+        password = password[1:-1]
+
+    if not password:
         print("ERROR: Password required. Set MT4_PASSWORD env var or pass --password.")
         sys.exit(1)
 
@@ -157,7 +162,7 @@ def main():
         time.sleep(5)
 
     open_login_dialog()
-    fill_login_dialog(args.login, args.password, args.server)
+    fill_login_dialog(args.login, password, args.server)
 
     print("=" * 50)
     print("Done. Check MT4 for connection status.")
